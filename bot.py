@@ -10,11 +10,13 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 # ----------------- Настройки -----------------
 BOT_TOKEN = "8512847602:AAFNT7FQGX8tu1ACELL9pI-LriKwhxob-B4"
-ADMIN_CHAT_ID = -1003108483615
-PAYMENT_URL = "https://example.com/pay?amount=50"  # платежная ссылка
-CHANNEL_INVITE_LINK = "https://t.me/+99IgL1KA_rhkYmZi"  # закрытый канал
-VIDEO_URL = "https://www.youtube.com/watch?v=P-3NZnicpbk&feature=youtu.be"
+ADMIN_CHAT_ID = -1003108483615  # сюда придут уведомления
+PAYMENT_URL = "https://example.com/pay?amount=50"  # ссылка на оплату
+CHANNEL_INVITE_LINK = "https://t.me/+99IgL1KA_rhkYmZi"  # ссылка на закрытый канал
+VIDEO_URL = "https://www.youtube.com/watch?v=P-3NZnicpbk&feature=youtu.be"  # обучающее видео
 MANUAL_PATH = os.path.join(os.path.dirname(__file__), "marketing_manual.pdf")
+# Ключевое слово для мгновенной проверки
+ADMIN_KEYWORD = "Артемис Комканян"
 # ---------------------------------------------
 
 bot = Bot(token=BOT_TOKEN)
@@ -24,7 +26,6 @@ dp = Dispatcher(storage=MemoryStorage())
 class Flow(StatesGroup):
     landed = State()
     viewed = State()
-    waiting_pay = State()
     finished = State()
 
 # Отправка оффера через 40-60 минут
@@ -34,20 +35,13 @@ async def schedule_offer(chat_id: int, delay_seconds: int = None):
 
     try:
         await asyncio.sleep(delay_seconds)
-        # кнопка ведет сразу на платеж
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="💳 Оформить подписку со скидкой 50%", url=PAYMENT_URL)]
-        ])
-        await bot.send_message(
-            chat_id,
-            "🔥 Специальное предложение — только для тебя!\n\n"
-            "Индивидуальная **скидка 50%** на доступ в закрытый канал Foton Plus.\n\n"
-            "После оплаты вы автоматически получите приглашение в канал.",
-            reply_markup=keyboard,
-            parse_mode="Markdown"
+        await bot.send_message(chat_id,
+            f"🔥 Специальное предложение — только для тебя!\n\n"
+            f"Теперь ты можешь получить доступ к закрытому каналу Foton Plus.\n\n"
+            f"Ссылка на канал: {CHANNEL_INVITE_LINK}"
         )
     except Exception as e:
-        print(f"[schedule_offer] ошибка: {e}")
+        print(f"[schedule_offer] не удалось отправить оффер пользователю {chat_id}: {e}")
 
 # === /start ===
 @dp.message(CommandStart())
@@ -55,9 +49,9 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await state.set_state(Flow.landed)
     text = (
         "🔥 Привет! Ты попал(а) в спец-воронку Foton Plus.\n\n"
-        "У нас есть **закрытый канал по маркетингу**, где делимся фишками и приемами, "
+        "У нас есть **закрытый канал по маркетингу**, где мы делимся фишками и приемами, "
         "которых нет в открытом доступе — рабочие воронки, шаблоны, кейсы.\n\n"
-        "Как бонус — получи короткое видео «Запуск первой рекламы» и мини-мануал."
+        "Как бонус — можешь сразу получить короткое обучающее видео «Запуск первой рекламы» и мини-мануал."
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎁 Получить бонус (видео + мануал)", callback_data="get_bonus")]
@@ -84,46 +78,30 @@ async def cb_get_bonus(callback: types.CallbackQuery, state: FSMContext):
 
     await state.set_state(Flow.viewed)
 
-    # планируем оффер
+    # планируем оффер через 40-60 минут
     asyncio.create_task(schedule_offer(callback.from_user.id))
 
     # уведомляем админа
     try:
-        await bot.send_message(
-            ADMIN_CHAT_ID,
+        await bot.send_message(ADMIN_CHAT_ID,
             f"🟢 Бонус выдан пользователю\n👤 @{callback.from_user.username or callback.from_user.full_name}\nID: {callback.from_user.id}"
         )
     except Exception:
         pass
-        # Секретная команда для теста (отправляет ссылку на канал сразу)
-ADMIN_SECRET = "/testoffer"
 
+# === Проверка ключевого слова для админа (мгновенная выдача ссылки) ===
 @dp.message()
-async def admin_test_offer(message: types.Message, state: FSMContext):
-    # проверяем, что автор сообщения — админ
+async def admin_keyword_check(message: types.Message, state: FSMContext):
     if message.from_user.id == abs(ADMIN_CHAT_ID):
-        parts = message.text.strip().split()
-        if parts[0] == ADMIN_SECRET:
-            # если указан Telegram ID пользователя, отправляем ему ссылку
-            if len(parts) == 2:
-                try:
-                    target_id = int(parts[1])
-                    await bot.send_message(
-                        target_id,
-                        f"🎉 Тестовая выдача доступа — вот ссылка на канал:\n\n{CHANNEL_INVITE_LINK}"
-                    )
-                    await message.answer(f"✅ Ссылка отправлена пользователю {target_id}")
-                except Exception as e:
-                    await message.answer(f"❌ Ошибка: {e}")
-            else:
-                # если ID не указан — бот отправляет ссылку администратору (тебе)
+        if message.text.strip() == ADMIN_KEYWORD:
+            try:
                 await bot.send_message(
                     message.from_user.id,
-                    f"🎉 Тестовая выдача доступа — вот ссылка на канал:\n\n{CHANNEL_INVITE_LINK}"
+                    f"🎉 Тестовая мгновенная выдача доступа — вот ссылка на канал:\n\n{CHANNEL_INVITE_LINK}"
                 )
-                await message.answer("✅ Ссылка отправлена тебе (админ)")
-
-
+                await message.answer("✅ Ссылка отправлена (админ)")
+            except Exception as e:
+                await message.answer(f"❌ Ошибка: {e}")
 
 # === Запуск бота ===
 async def main():
