@@ -10,10 +10,10 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 # ----------------- Настройки -----------------
 BOT_TOKEN = "8512847602:AAFNT7FQGX8tu1ACELL9pI-LriKwhxob-B4"
-ADMIN_CHAT_ID = -1003108483615  # сюда придут уведомления
-PAYMENT_URL = "https://example.com/pay?amount=50"  # ссылка на оплату
-CHANNEL_INVITE_LINK = "https://t.me/+your_invite_link_here"  # ссылка на закрытый канал
-VIDEO_URL = "https://www.youtube.com/watch?v=P-3NZnicpbk&feature=youtu.be"  # обучающее видео
+ADMIN_CHAT_ID = -1003108483615
+PAYMENT_URL = "https://example.com/pay?amount=50"  # платежная ссылка
+CHANNEL_INVITE_LINK = "https://t.me/+99IgL1KA_rhkYmZi"  # закрытый канал
+VIDEO_URL = "https://www.youtube.com/watch?v=P-3NZnicpbk&feature=youtu.be"
 MANUAL_PATH = os.path.join(os.path.dirname(__file__), "marketing_manual.pdf")
 # ---------------------------------------------
 
@@ -34,17 +34,20 @@ async def schedule_offer(chat_id: int, delay_seconds: int = None):
 
     try:
         await asyncio.sleep(delay_seconds)
+        # кнопка ведет сразу на платеж
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="💳 Оформить подписку со скидкой 50%", url=PAYMENT_URL)],
-            [InlineKeyboardButton(text="✅ Я оплатил", callback_data="paid_confirm")]
+            [InlineKeyboardButton(text="💳 Оформить подписку со скидкой 50%", url=PAYMENT_URL)]
         ])
-        await bot.send_message(chat_id, (
+        await bot.send_message(
+            chat_id,
             "🔥 Специальное предложение — только для тебя!\n\n"
-            "Мы готовы дать индивидуальную **скидку 50%** на доступ в закрытый канал Foton Plus.\n\n"
-            "Если оплатишь — сразу пришлю приглашение в канал."
-        ), reply_markup=keyboard, parse_mode="Markdown")
+            "Индивидуальная **скидка 50%** на доступ в закрытый канал Foton Plus.\n\n"
+            "После оплаты вы автоматически получите приглашение в канал.",
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
     except Exception as e:
-        print(f"[schedule_offer] не удалось отправить оффер пользователю {chat_id}: {e}")
+        print(f"[schedule_offer] ошибка: {e}")
 
 # === /start ===
 @dp.message(CommandStart())
@@ -52,9 +55,9 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await state.set_state(Flow.landed)
     text = (
         "🔥 Привет! Ты попал(а) в спец-воронку Foton Plus.\n\n"
-        "У нас есть **закрытый канал по маркетингу**, где мы делимся фишками и приемами, "
+        "У нас есть **закрытый канал по маркетингу**, где делимся фишками и приемами, "
         "которых нет в открытом доступе — рабочие воронки, шаблоны, кейсы.\n\n"
-        "Как бонус — можешь сразу получить короткое обучающее видео «Запуск первой рекламы» и мини-гайд."
+        "Как бонус — получи короткое видео «Запуск первой рекламы» и мини-мануал."
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎁 Получить бонус (видео + мануал)", callback_data="get_bonus")]
@@ -86,26 +89,12 @@ async def cb_get_bonus(callback: types.CallbackQuery, state: FSMContext):
 
     # уведомляем админа
     try:
-        await bot.send_message(ADMIN_CHAT_ID,
+        await bot.send_message(
+            ADMIN_CHAT_ID,
             f"🟢 Бонус выдан пользователю\n👤 @{callback.from_user.username or callback.from_user.full_name}\nID: {callback.from_user.id}"
         )
     except Exception:
         pass
-
-# === Пользователь нажал "Я оплатил" ===
-@dp.callback_query(lambda c: c.data == "paid_confirm")
-async def cb_paid_confirm(callback: types.CallbackQuery, state: FSMContext):
-    await callback.answer("Спасибо! Проверяю оплату...")
-    try:
-        await callback.message.answer(f"🎉 Спасибо за оплату! Вот приглашение в канал:\n\n{CHANNEL_INVITE_LINK}")
-        await bot.send_message(ADMIN_CHAT_ID,
-            f"💰 Пользователь подтвердил оплату (нажал 'Я оплатил'):\n"
-            f"👤 @{callback.from_user.username or callback.from_user.full_name}\nID: {callback.from_user.id}"
-        )
-        await state.set_state(Flow.finished)
-    except Exception as e:
-        print("cb_paid_confirm error:", e)
-        await callback.message.answer("❌ Не удалось отправить приглашение. Админ уведомлён.")
 
 # === Запуск бота ===
 async def main():
