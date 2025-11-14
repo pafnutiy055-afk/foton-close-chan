@@ -95,6 +95,37 @@ async def cb_get_bonus(callback: types.CallbackQuery, state: FSMContext):
         )
     except Exception:
         pass
+        # --- секретное слово для админа ---
+ADMIN_SECRET = "/giveaccess"
+
+@dp.message()
+async def admin_commands(message: types.Message, state: FSMContext):
+    # проверяем, что это админ
+    if message.from_user.id == abs(ADMIN_CHAT_ID):
+        text = message.text.strip()
+        # если сообщение = секретное слово + Telegram ID пользователя
+        # пример: /giveaccess 123456789
+        if text.startswith(ADMIN_SECRET):
+            parts = text.split()
+            if len(parts) == 2:
+                try:
+                    target_id = int(parts[1])
+                    # отправляем приглашение в канал сразу
+                    await bot.send_message(
+                        target_id,
+                        f"🎉 Администратор выдал доступ в канал:\n\n{CHANNEL_INVITE_LINK}"
+                    )
+                    await message.answer(f"✅ Приглашение отправлено пользователю {target_id}")
+                    # уведомляем админа о выдаче
+                    await bot.send_message(
+                        ADMIN_CHAT_ID,
+                        f"🟢 Админ выдал доступ пользователю {target_id}"
+                    )
+                except Exception as e:
+                    await message.answer(f"❌ Ошибка: {e}")
+            else:
+                await message.answer("❌ Неверный формат. Используй /giveaccess <user_id>")
+
 
 # === Запуск бота ===
 async def main():
